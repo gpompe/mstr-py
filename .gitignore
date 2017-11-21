@@ -1,6 +1,7 @@
 # Custom for this project
 *.out
 playground.py
+*_private.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
