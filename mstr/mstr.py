@@ -3,83 +3,6 @@ import logging as log
 import logging.config
 from datetime import datetime
 from urllib.parse import urlparse,urljoin
-# from config_private import *
-
-# ContentType = "application/json" # To be added in each request as a request header
-
-# #MicroStrategy Object
-# #mstrcubeid = "CC02C5C24AE2803ABF14EDA5038159D4" # unsupported cube
-# mstrcubeid = "6C204A564286DEB3E2CACB98762272C0"  # Id of the cube or report used
-# itemPerPage = 20                         # Number of items the table will display per page
-
-
-# # ******** Constants
-
-# BASE_URL = ("https" if isSecureConnection else "http") + "://" + RESTServerIP + ":" + RESTServerPort + "/MicroStrategyLibrary/api/"
-
-# REQ_TIMEOUT = 30    # Requests timeout
-
-
-
-# # Entry Point
-# def main():
-#     #logging.config.fileConfig('logging.conf')
-
-#     # Create token stuct
-#     authToken = AuthorizationToken()
-
-
-#     # Create Session
-#     _session = requests.Session()
-
-#     hdrs = {"ContentType": ContentType,
-#             "Accept": ContentType}
-
-#     # Open Session
-#     bodyopen = {"username": username,
-#             "password": password,
-#             "loginMode": 1}
-
-#     try:
-#         r = _session.request(url=BASE_URL + "auth/login", headers=hdrs,timeout=REQ_TIMEOUT,json=bodyopen)
-#         r.raise_for_status()
-#         log.info("Open session Status code:"+str(r.status_code))
-
-#         print(r.headers)
-#         authToken.token = r.headers['X-MSTR-AuthToken']
-
-#     except requests.exceptions.HTTPError as err:
-#         log.error("HTTP Error: %s\nDetails: %s",err,r.text)
-#     except ValueError as err:
-#         log.error(err)
-#     except requests.exceptions.RequestException as e:
-#         log.error(e)
-
-
-#     # Get Project List
-#     for x in getProjectList(_session, authToken):
-#         print(x)
-
-#     # print(getCubeDefinition(authToken,mstrcubeid))
-
-#     if authToken.isValid:
-#         #Close session
-#         try:
-#             hdrsclose = {"ContentType": ContentType,
-#                          "X-MSTR-AuthToken": authToken.token}
-
-#             r = _session.request(url=BASE_URL + "auth/logout", headers=hdrsclose,timeout=REQ_TIMEOUT,data='{}')
-#             r.raise_for_status()
-#             log.info("Close session Status code:"+str(r.status_code))
-#             print(r.headers)
-#         except requests.exceptions.HTTPError as err:
-#             log.error("HTTP Error: %s\nDetails: %s",err,r.text)
-#         except:
-#             log.error("Error "+str(sys.exc_info())+"occured.")
-
-
-
-
 
 # def getCubeDefinition(_pSession,poToken,pCubeId):
 #     ''' Retrieves the cube definition '''
@@ -138,7 +61,7 @@ class MSTRSession:
         # Initialize private fields
         # Create web Session
         self._session = requests.Session()
-        # Add default headers to the session 
+        # Add default headers to the session
         self._session.headers.update({"ContentType": MSTRSession.ContentType,"Accept": MSTRSession.ContentType})     # Default Headers
         self._valid = False
         # Create token struct
@@ -220,16 +143,21 @@ class MSTRSession:
         # Search by ID
         self.currentProject = next((elem for elem in self._projects if elem['id']==pProject),None)
         log.debug("MSTR Session Default Project searched by ID = %s", self.currentProject )
+
         if self.currentProject == None:
             # Search by Alias if there is an alias for the project
             self.currentProject = next((elem for elem in self._projects if elem['alias']==pProject and len(elem['alias'])>0),None)
             log.debug("MSTR Session Default Project searched by Alias = %s", self.currentProject )
-        
+
         if self.currentProject == None:
             # Search by Name
             self.currentProject = next((elem for elem in self._projects if elem['name']==pProject),None)
             log.debug("MSTR Session Default Project searched by Name = %s", self.currentProject )
-        
+
+        # If there is a current project, set the header globally
+        if self.currentProject != None:
+            self._session.headers.update({"X-MSTR-ProjectID": self.currentProject["id"]})
+
 
 
     def request(self,pVerb,pURL,pHeaders={},pBody=None):
