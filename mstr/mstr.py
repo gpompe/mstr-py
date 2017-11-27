@@ -1,32 +1,12 @@
-import requests, sys
+import requests
+import sys
 import logging as log
 import logging.config
 from datetime import datetime
-from urllib.parse import urlparse,urljoin
+from urllib.parse import urlparse, urljoin
 import re
 import json
-
-# def getCubeDefinition(_pSession,poToken,pCubeId):
-#     ''' Retrieves the cube definition '''
-#     if poToken.isValid:
-#         log.debug("Token param: "+str(poToken))
-#         log.debug("Cube ID param: "+pCubeId)
-#         try:
-#             hdrs = {"X-MSTR-AuthToken": poToken.token,
-#                     "Accept": ContentType}
-
-#             log.debug("Request URL: "+BASE_URL + "cubes/" + pCubeId)
-#             r = _pSession.get(url=BASE_URL + "cubes/" + pCubeId, headers=hdrs,timeout=REQ_TIMEOUT)
-#             r.raise_for_status()
-#             log.info("Get cube definition Status code:"+str(r.status_code))
-#             return r.text
-
-#         except requests.exceptions.HTTPError as err:
-#             log.error("HTTP Error: %s\nDetails: %s",err,r.text)
-#         except:
-#             log.error("Error "+str(sys.exc_info())+"occured.")
-
-
+import mstr.mstrenum as enum
 
 
 class MSTRSession:
@@ -35,31 +15,49 @@ class MSTRSession:
     '''
 
     # Constants
-    ContentType = "application/json" # To be added in each request as a request header
-
+    ContentType = "application/json"  # To be added in each request as a request header
+    # Configuration
     REQ_TIMEOUT = 30    # Requests timeout      TODO: Add to configuration
+    TOKEN_LIFE = 300  # Time between token validations in seconds TODO: Add to configuration
 
+    # Properties
     @property
     def isValid(self):
         ''' Check if the session is valid
             The check is local now, but probably needs to be remote and cached. Local unless # of secs passed since last remote check
             Use /sessions remote method
         '''
+        if self._authToken.isValid:
+            if self._authToken.validFor > self.TOKEN_LIFE:
+                req = self.request('GET', urljoin(self._mstr_url, "sessions"), raiseError=False)
+                if req.status_code == 204:
+                    self._authToken.validate()
+                else:
+                    # self.open(self._user, self._passw,autoload=False)
+                    self._valid = False
+        else:
+            # self.open(self._user, self._passw,autoload=False)
+            self._valid = False
+
         return self._valid
 
-    def getProjectHeader(self, pMstrProjectId):
-        return ({"X-MSTR-ProjectID": pMstrProjectId} if pMstrProjectId != None and  re.fullmatch("^[A-Z0-9]{32}$",pMstrProjectId,re.IGNORECASE) else {})
+    @property
+    def AuthToken(self):
+        return self._authToken
 
+    @staticmethod
+    def getProjectHeader(pMstrProjectId):
+        return ({"X-MSTR-ProjectID": pMstrProjectId} if pMstrProjectId != None and re.fullmatch("^[A-Z0-9]{32}$", pMstrProjectId, re.IGNORECASE) else {})
 
     @property
     def projectCount(self):
         return len(self._projects)
 
-    def __init__(self,mstr_api_url,username=None,userpassword=None,autoopen=True):
+    def __init__(self, mstr_api_url, username=None, userpassword=None, autoopen=True, autoload=True):
         '''MSTRSession Constructor
             mstr_api_url: full URL for MicroStrategy API (ex. https://demo.microstrategy.com/MicroStrategyLibrary/api/)
         '''
-        log.debug("MSTR Session creation for %s",username)
+        log.debug("MSTR Session creation for %s", username)
         self._mstr_url = mstr_api_url + '/'     # Add final slash in case is missing, double slash is handled by the urljoin
         self._user = username
         self._passw = userpassword
@@ -68,47 +66,47 @@ class MSTRSession:
         # Create web Session
         self._session = requests.Session()
         # Add default headers to the session
-        self._session.headers.update({"ContentType": MSTRSession.ContentType,"Accept": MSTRSession.ContentType})     # Default Headers
+        self._session.headers.update({"ContentType": MSTRSession.ContentType, "Accept": MSTRSession.ContentType})     # Default Headers
         self._valid = False
         # Create token struct
         self._authToken = AuthorizationToken()
         # Project List
-        self._projects=[]
+        self._projects = []
         # Default Project
-        self.currentProject=None
+        self.currentProject = None
 
         if autoopen and self._user != None and self._passw != None:
-            self.open(self._user, self._passw)
+            self.open(self._user, self._passw, autoload)
         log.debug("MSTR Session created for %s", self._user)
 
-
-    def open(self,username,userpassword,autoload=True):
+    def open(self, username, userpassword, autoload=True):
         ''' Open a connection to MSTR Server and get the list of projects available for the user'''
-        log.debug("MSTR Session opening for %s",username)
+        log.debug("MSTR Session opening for %s", username)
         self._user = username
         self._passw = userpassword
 
         # JSON Body Open Session
         open_body = {"username": self._user,
-                "password": self._passw,
-                "loginMode": 1}
+                     "password": self._passw,
+                     "loginMode": 1}
         try:
             # Get the authentication token
-            self._authToken.token = self.request('POST',urljoin(self._mstr_url, "auth/login"),{},open_body).headers['X-MSTR-AuthToken']
+            req = self.request('POST', urljoin(self._mstr_url, "auth/login"), {}, open_body)
+            self._authToken.token = req.headers['X-MSTR-AuthToken']
             # Add the auth token to the session headers to be included in all future requests
-            self._session.headers.update( {"X-MSTR-AuthToken": self._authToken.token} if self._authToken.isValid else {})
+            self._session.headers.update({"X-MSTR-AuthToken": self._authToken.token} if self._authToken.isValid else {})
             # Make the session valid
             self._valid = True
             if autoload:
                 # Only use projects with Status = Active (0)
-                self._projects = [elem for elem in self.getProjectList() if elem['status']==0]
-
+                self._projects = [elem for elem in self.getProjectList() if elem['status'] == 0]
+        except MSTRError as e:
+            raise
         except KeyError as e:
-            log.error("X-MSTR-AuthToken does not exist in the the header.",e)
-            raise MSTRError("X-MSTR-AuthToken does not exist in the the header.",e)
+            log.error("X-MSTR-AuthToken does not exist in the the header. %s", e)
+            raise MSTRError("X-MSTR-AuthToken does not exist in the the header.", e)
 
         log.debug("MSTR Session created for %s", self._user)
-
 
     def close(self):
         ''' Close MSTR Session
@@ -116,20 +114,19 @@ class MSTRSession:
         log.debug("MSTR Session closing for %s", self._user)
         if self.isValid:
 
-            self.request('POST',urljoin(self._mstr_url, "auth/logout"))
+            self.request('POST', urljoin(self._mstr_url, "auth/logout"))
             self._valid = False
 
             log.debug("MSTR Session closed for %s", self._user)
         else:
             log.debug("MSTR Session closing failed. Invalid session for %s", self._user)
 
-
     def getProjectList(self):
         ''' Get the list of projects available for the session'''
         log.debug("MSTR Session Project List for %s", self._user)
         if self.isValid:
 
-            r = self.request('GET',urljoin(self._mstr_url, "projects"))
+            r = self.request('GET', urljoin(self._mstr_url, "projects"))
 
             log.debug("MSTR Session Project List for %s", self._user)
             return list(r.json())
@@ -137,47 +134,80 @@ class MSTRSession:
             log.debug("MSTR Session Project List failed. Invalid session for %s", self._user)
             return None
 
+    def getObjectInformation(self, pMstrObject, pMstrProjectId=None):
+        ''' Get information for an specific object'''
+        log.debug("MSTR Session Object Info for %s", self._user)
+        if self.isValid:
 
-    def searchProject(self,pProject):
-        ''' 
+            r = self.request('GET', urljoin(self._mstr_url, "objects") + "/" + pMstrObject.ID, pHeaders=self.getProjectHeader(pMstrProjectId), pParams={"type": pMstrObject.Type.value})
+
+            log.debug("MSTR Session Object Info for %s", self._user)
+            pMstrObject.update(r.json())
+            return pMstrObject
+        else:
+            log.debug("MSTR Session Object Info failed. Invalid session for %s", self._user)
+            return None
+
+    def searchForProject(self, pProject):
+        '''
         Searches for project in ID, Alias and Name (in this order until find first ocurrence)
         Need to check if multiple IS ar connected
         '''
-        log.debug("MSTR Session Default Project searching for %s", pProject )
+        log.debug("MSTR Session Default Project searching for %s", pProject)
         # Search by ID
-        _lcurProject = next((elem for elem in self._projects if elem['id']==pProject),None)
-        log.debug("MSTR Session Default Project searched by ID = %s", _lcurProject )
+        _lcurProject = next((elem for elem in self._projects if elem['id'] == pProject), None)
+        log.debug("MSTR Session Default Project searched by ID = %s", _lcurProject)
 
         if _lcurProject == None:
             # Search by Alias if there is an alias for the project
-            _lcurProject = next((elem for elem in self._projects if elem['alias']==pProject and len(elem['alias'])>0),None)
-            log.debug("MSTR Session Default Project searched by Alias = %s", _lcurProject )
+            _lcurProject = next((elem for elem in self._projects if elem['alias'] == pProject and len(elem['alias']) > 0), None)
+            log.debug("MSTR Session Default Project searched by Alias = %s", _lcurProject)
 
         if _lcurProject == None:
             # Search by Name
-            _lcurProject = next((elem for elem in self._projects if elem['name']==pProject),None)
-            log.debug("MSTR Session Default Project searched by Name = %s", _lcurProject )
+            _lcurProject = next((elem for elem in self._projects if elem['name'] == pProject), None)
+            log.debug("MSTR Session Default Project searched by Name = %s", _lcurProject)
 
         return _lcurProject
 
+    def quickSearchProject(self, pSearchString=None, pRootFolderId=None, pSearchType=enum.EnumDssXmlSearchType.DSSXMLSEARCHTYPECONTAINS, pObjectTypes=[enum.EnumDSSObjectType.DSSTYPEREPORTDEFINITION], pMstrProjectId=None):
+        ''' Get the list of projects available for the session'''
+        log.debug("MSTR Session Quick Search for %s", self._user)
+        if self.isValid:
+            payload = {"pattern": pSearchType.value, "getAncestors": True}
+            if pSearchString != None:
+                payload.update({"name": str(pSearchString)})
 
-    def setDefaultProject(self,pProject):
+            if pRootFolderId != None:
+                payload.update({"root": str(pRootFolderId)})
+
+            if isinstance(pObjectTypes, list):
+                payload.update({"type": list(map((lambda x: x.value), pObjectTypes))})
+
+            r = self.request('GET', urljoin(self._mstr_url, "searches/results"), pHeaders=self.getProjectHeader(pMstrProjectId), pParams=payload)
+
+            log.debug("MSTR Session Quick Search for %s", self._user)
+            return MSTRSearchResults(r.json())
+        else:
+            log.debug("MSTR Session Quick Search failed. Invalid session for %s", self._user)
+            return None
+
+    def setDefaultProject(self, pProject):
         ''' Set the default project to be used if none is selected.
         '''
         # Try to set the current project
-        self.currentProject = self.searchProject(pProject)
+        self.currentProject = self.searchForProject(pProject)
 
         # If there is a current project, set the header globally
         if self.currentProject != None:
             self._session.headers.update(self.getProjectHeader(self.currentProject["id"]))
             log.debug("MSTR Session Set Header Project ID = %s", self.currentProject["id"])
 
-
-    def getDatasetDefinition(self,pMstrObjectId,pObjectType=776,pMstrProjectId=None):
+    def getDatasetDefinition(self, pMstrObject, pMstrProjectId=None):
         ''' Get Object definition from metadata
              Reports
              DssSubTypeReportGrid = 0x0300 = 768, DssSubTypeReportGraph = 0x0301, DssSubTypeReportEngine = 0x0302, DssSubTypeReportText = 0x0303,
-             DssSubTypeReportGridAndGraph = 0x0306, DssSubTypeReportNonInteractive = 0x0307, 
+             DssSubTypeReportGridAndGraph = 0x0306, DssSubTypeReportNonInteractive = 0x0307,
 
              Cubes
              DssSubTypeReportCube = 0x0308 = 776
@@ -186,55 +216,111 @@ class MSTRSession:
         log.debug("MSTR Session Dataset Definition for %s", self._user)
         if self.isValid:
 
-            if pObjectType == 776:
+            if pMstrObject.Subtype == enum.EnumDSSSubTypes.DSSSUBTYPEREPORTCUBE:
                 _lmethod = "cubes"
             else:
                 _lmethod = "reports"
             try:
-                r = self.request('GET',urljoin(self._mstr_url, _lmethod + "/" + pMstrObjectId),pHeaders=self.getProjectHeader(pMstrProjectId))
+                r = self.request('GET', urljoin(self._mstr_url, _lmethod + "/" + pMstrObject.ID), pHeaders=self.getProjectHeader(pMstrProjectId))
 
                 log.debug("MSTR Session Dataset Definition for %s", self._user)
-                return MSTRObjDefinition(r.json())
+                return MSTRDatasetDefinition(r.json())
             except MSTRError as err:
-                log.debug("MSTR Session Dataset Definition failed. HTTP Error: %s",err)
+                log.debug("MSTR Session Dataset Definition failed. HTTP Error: %s", err)
                 return None
         else:
             log.debug("MSTR Session Dataset Definition failed. Invalid session for %s", self._user)
             return None
 
-    def request(self,pVerb,pURL,pHeaders={},pBody=None):
+    def request(self, pVerb, pURL, pHeaders={}, pBody=None, pParams={}, raiseError=True):
         ''' Runs request request
         '''
         try:
-            r = self._session.request(method=pVerb,url=pURL, headers=pHeaders,timeout=MSTRSession.REQ_TIMEOUT,json=pBody)
-            r.raise_for_status()
-            log.info("Open session Status code:"+str(r.status_code))
-            log.debug("Response Headers: %s",r.headers)
-            log.debug("Response Content: %s",r.content)
+            log.debug("Session Headers: %s", self._session.headers)
+            log.debug("Request Headers: %s", pHeaders)
+            log.debug("Request Content: %s", pBody)
+            r = self._session.request(method=pVerb, url=pURL, headers=pHeaders, timeout=MSTRSession.REQ_TIMEOUT, json=pBody, params=pParams)
+            # r.raise_for_status()
+            log.info("Open session Status code:" + str(r.status_code))
+            log.debug("Response Headers: %s", r.headers)
+            log.debug("Response Content: %s", r.content)
 
-        except requests.exceptions.HTTPError as err:
-            raise MSTRError("Details: %s" % r.text,err)
+            if (r.status_code < 200 or r.status_code >= 300) and raiseError:
+                raise MSTRError(pjson=r.json())
         except ValueError as err:
             log.error(err)
             raise
         except requests.exceptions.RequestException as e:
-            raise MSTRError("Details: %s" % r.text,err)
+            raise MSTRError("Details: %s" % r.text, err)
+
         return r
 
 
 class MSTRObjDefinition:
 
-    def __init__(self,pJsonObjDefinition):
+    def __init__(self, pJsonObjDefinition):
         self._json = pJsonObjDefinition
 
     def __str__(self):
         return json.dumps(self._json)
 
 
+class MSTRDatasetDefinition(MSTRObjDefinition):
+    _attributes = []
+    _metrics = []
+
+    def __init__(self, pJsonObjDefinition):
+        super(MSTRDatasetDefinition, self).__init__(pJsonObjDefinition)
+        # print(pJsonObjDefinition)
+        try:
+            self._attributes = list(map((lambda x: MSTRAttribute(x["id"], x)), pJsonObjDefinition["result"]["definition"]["availableObjects"]["attributes"]))
+            self._metrics = list(map((lambda x: MSTRMetric(x["id"], x)), pJsonObjDefinition["result"]["definition"]["availableObjects"]["metrics"]))
+        except KeyError as e:
+            log.error("Error parsing dataset definition")
+            raise MSTRError(msg="Error parsing dataset definition", original_exception=e)
+
+    @property
+    def Attributes(self):
+        return self._attributes
+
+    @property
+    def Metrics(self):
+        return self._metrics
+
+    def getAttribute(self, attrName):
+        return [attr for attr in self._attributes if attr.Name == attrName]
+
+    def __str__(self):
+        retvalA = ""
+        retvalM = ""
+        for x in self._attributes:
+            retvalA += str(x)
+        for x in self._metrics:
+            retvalM += str(x)
+        return "Attributes: [{0}]\nMetrics:[{1}]".format(retvalA, retvalM)
+
+
+class MSTRSearchResults:
+    _results = []
+
+    def __init__(self, pJsonSearchResult):
+        self._results = list(map((lambda x: MSTRObject(x["id"], x)), pJsonSearchResult.get("result", [])))
+
+    @property
+    def Results(self):
+        return self._results
+
+    def __str__(self):
+        retval = ""
+        for x in self._results:
+            retval += str(x)
+        return retval
+
+
 class MSTRObject:
     ''' Base MSTR Object
     The constructor receives an optional param with json object definition'''
-    
+
     _name = None
     _type = None
     _abbreviation = None
@@ -248,25 +334,39 @@ class MSTRObject:
     _acg = None
     _iconPath = None
     _viewMedia = None
-    _comments = None
+    _comments = []
+    _ancestors = []
 
-    def __init__(self,ID,pJsonObjDefinition=None):
-        self._ID = ID
+    def __init__(self, Id, pJsonObjDefinition=None):
+        self._ID = Id
+        self.update(pJsonObjDefinition)
+
+    def update(self, pJsonObjDefinition):
         if pJsonObjDefinition != None:
-            self._name = pJsonObjDefinition.get("name",None)
-            self._type = pJsonObjDefinition.get("type",None)
-            self._abbreviation = pJsonObjDefinition.get("abbreviation",None)
-            self._description = pJsonObjDefinition.get("description",None)
-            self._hidden = pJsonObjDefinition.get("hidden",None)
-            self._subtype = pJsonObjDefinition.get("subtype",None)
-            self._extType = pJsonObjDefinition.get("extType",None)
-            self._dateCreated = pJsonObjDefinition.get("dateCreated",None)
-            self._dateModified = pJsonObjDefinition.get("dateModified",None)
-            self._version = pJsonObjDefinition.get("version",None)
-            self._acg = pJsonObjDefinition.get("acg",None)
-            self._iconPath = pJsonObjDefinition.get("iconPath",None)
-            self._viewMedia = pJsonObjDefinition.get("viewMedia",None)
-            self._comments = pJsonObjDefinition.get("comments",None)
+            self._name = pJsonObjDefinition.get("name", None)
+            try:
+                if isinstance(pJsonObjDefinition.get("type", None), int):
+                    self._type = enum.EnumDSSObjectType(pJsonObjDefinition.get("type", None))
+                else:
+                    self._type = enum.EnumDSSObjectType.searchName(pJsonObjDefinition.get("type", None))
+            except ValueError:
+                self._type = None
+            self._abbreviation = pJsonObjDefinition.get("abbreviation", None)
+            self._description = pJsonObjDefinition.get("description", None)
+            self._hidden = pJsonObjDefinition.get("hidden", None)
+            try:
+                self._subtype = enum.EnumDSSSubTypes(pJsonObjDefinition.get("subtype", None))
+            except ValueError:
+                self._subtype = None
+            self._extType = pJsonObjDefinition.get("extType", None)
+            self._dateCreated = pJsonObjDefinition.get("dateCreated", None)
+            self._dateModified = pJsonObjDefinition.get("dateModified", None)
+            self._version = pJsonObjDefinition.get("version", None)
+            self._acg = pJsonObjDefinition.get("acg", None)
+            self._iconPath = pJsonObjDefinition.get("iconPath", None)
+            self._viewMedia = pJsonObjDefinition.get("viewMedia", None)
+            self._comments = pJsonObjDefinition.get("comments", [])
+            self._ancestors = pJsonObjDefinition.get("ancestors", [])
 
     # Read only properties
     @property
@@ -329,47 +429,94 @@ class MSTRObject:
     def Comments(self):
         return self._comments
 
+    @property
+    def Ancestors(self):
+        return self._ancestors
 
+    def __repr__(self):
+        """ Textual representation of the object """
+        return "ID: " + str(self._ID) + " | Name: " + str(self._name) + " | Type: " + str(self._type) + " | Abbreviation: " + str(self._abbreviation) + " | Description: " + str(self._description) + " | Hidden: " + str(self._hidden) + " | Subtype: " + str(self._subtype) + " | ExtType: " + str(self._extType) + " | DateCreated: " + str(self._dateCreated) + " | DateModified: " + str(self._dateModified) + " | Version: " + str(self._version) + " | Acg: " + str(self._acg) + "  | IconPath: " + str(self._iconPath) + " | ViewMedia: " + str(self._viewMedia) + " | Comments: " + str(self._comments) + " | Ancestors: " + str(self._ancestors)
+        # .format(self._ID,self._name,str(self._type),self._abbreviation,self._description,self._hidden,str(self._subtype),self._extType,self._dateCreated,self._dateModified,self._version,self._acg,self._iconPath,self._viewMedia,self._comments,self._ancestors)
 
+    def __str__(self):
+        return "|-> " + self.__repr__() + " <-|"
 
 # TOKEN Class
 
+
 class AuthorizationToken:
 
-    def __init__(self):
-        self.reset()
+    def __init__(self, token=None):
+        self.token = token
 
     def reset(self):
-        self._token=""
-        self.isValid=False
-        self.issuedOn=None
+        self._token = ""
+        self.isValid = False
+        self.issuedOn = None
 
     @property
     def token(self):
         return self._token
 
     @token.setter
-    def token(self,ptoken=""):
-        if len(ptoken) == 0:
+    def token(self, token=None):
+        if token == None:
             self.reset()
-        elif len(ptoken) < 20:
+        elif len(token) < 20:       # this validation needs to be checked.
             raise ValueError('Invalid token!!')
         else:
-            self._token= ptoken
+            self._token = token
             self.isValid = True
             self.issuedOn = datetime.now()
 
-    def __str__(self):
-        return "token:["+self.token+"] - isValid:"+str(self.isValid)+" - issuedOn:"+str(self.issuedOn)
+    def validate(self):
+        self.issuedOn = datetime.now()
 
+    @property
+    def validFor(self):
+        return ((datetime.now() - self.issuedOn).total_seconds() if self.issuedOn != None else None)
+
+    def __str__(self):
+        return "token:[{0}] - isValid: {1} - issuedOn: {2}".format(self.token, self.isValid, self.issuedOn)
+
+
+class MSTRAttribute(MSTRObject):
+    _forms = []
+
+    def __init__(self, ID, pJsonObjDefinition=None):
+        super(MSTRAttribute, self).__init__(ID, pJsonObjDefinition)
+        self._forms = pJsonObjDefinition.get("forms", [])
+
+    @property
+    def Forms(self):
+        return self._forms
+
+    def __repr__(self):
+        """ Textual representation of the object """
+        return super().__repr__() + " | Forms: " + str(self._forms)
+
+
+class MSTRMetric(MSTRObject):
+
+    def __init__(self, ID, pJsonObjDefinition=None):
+        super(MSTRMetric, self).__init__(ID, pJsonObjDefinition)
 
 
 class MSTRError(Exception):
     """Generic exception for MSTR library"""
-    def __init__(self, msg, original_exception):
-        super(MSTRError, self).__init__(msg + ("Underlying Exception: %s" % original_exception) + msg)
+
+    def __init__(self, msg="", original_exception=None, code=None, error=None, pjson=None):
+        super(MSTRError, self).__init__((json.dumps(pjson) if pjson != None else msg) + (("\nUnderlying Exception: %s" % original_exception) if original_exception != None else ""))
         self.original_exception = original_exception
-        log.error(msg + ("Underlying Exception: %s" % original_exception))
+        if pjson != None:
+            self.code = pjson.get("code", None)
+            self.message = pjson.get("message", None)
+            self.error = pjson.get("iServerCode", None)
+        else:
+            self.code = code
+            self.message = msg
+            self.error = error
+        log.error(self.message + (("\nUnderlying Exception: %s" % original_exception) if original_exception != None else "") + ((" Error: %s" % self.error) if self.error != None else "") + ((" Code: %s" % self.code) if self.code != None else ""))
 
 
 if __name__ == '__main__':
