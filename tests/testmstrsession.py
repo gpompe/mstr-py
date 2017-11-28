@@ -42,7 +42,7 @@ class TestMSTRSession(testtools.TestCase):
         self.assertEqual(m.isValid, True, "Failed to check if token is valid")
         self.assertEqual(m.token, "ji7ilqelnud37kpjkofgori17r", "Failed to store token")
         time.sleep(3)
-        self.assertGreater(m.validFor, 3, "Failed to return validity period")
+        self.assertGreaterEqual(m.validFor, 3, "Failed to return validity period")
         with testtools.ExpectedException(ValueError, msg="Failed to raise error on short token"):
             m.token = "shorttoken"
 

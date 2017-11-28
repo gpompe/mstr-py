@@ -232,6 +232,7 @@ class MSTRSession:
             log.debug("MSTR Session Dataset Definition failed. Invalid session for %s", self._user)
             return None
 
+
     def request(self, pVerb, pURL, pHeaders={}, pBody=None, pParams={}, raiseError=True):
         ''' Runs request request
         '''
@@ -265,7 +266,77 @@ class MSTRObjDefinition:
         return json.dumps(self._json)
 
 
+class MSTRDatasetResults(MSTRObjDefinition):
+    ''' Parses the JSON object into a dataset result
+        
+    '''
+    _attributes = []
+    _metrics = []
+
+    def __init__(self, pJsonObjDefinition):
+        super(MSTRDatasetDefinition, self).__init__(pJsonObjDefinition)
+        # print(pJsonObjDefinition)
+        try:
+           pass
+        except KeyError as e:
+            log.error("Error parsing objects dataset definition")
+            raise MSTRError(msg="Error parsing dataset definition", original_exception=e)
+
+
+    def getQueryResults(pJsonObjDefinition):
+        def getChildrenResults(pchildren,attrNames=[],pbase=[],pparent={}):
+            """ Recursive function to normalize the results """
+
+            for x in pchildren:
+                
+                # Get attribute definition. Removes the key attributeForms for the initial version. Might be needed later...
+                t = {(attrNames[x["element"]["attributeIndex"]] if len(attrNames)> x["element"]["attributeIndex"] else "element"+str(x["depth"])):{k: x["element"][k] for k in x["element"] if k !='formValues'}}
+                t.update(pparent)
+                
+                if "children" in x:
+                    getChildrenResults(x["children"],attrNames,pbase,t)
+                else:
+                    pbase.append({"attributes":t,"metrics": x["metrics"]})
+
+            return pbase
+
+        try:
+            
+            rows = getChildrenResults(pJsonObjDefinition["result"]["data"]["root"]["children"],[x["name"] for x in pJsonObjDefinition["result"]["definition"]["attributes"]])
+        except KeyError:
+            log.error("Error parsing dataset results")
+            raise MSTRError(msg="Error parsing dataset results", original_exception=e)
+
+    def getDataframeResults(pJsonObjDefinition):
+        def getChildrenResults(pchildren,attrNames=[],pbase=[],pparent={}):
+            """ Recursive function to normalize the results """
+
+            for x in pchildren:
+                
+                # Get attribute definition. 
+                t = {(attrNames[x["element"]["attributeIndex"]] if len(attrNames)> x["element"]["attributeIndex"] else "element"+str(x["depth"])): x["element"]["name"]}
+                t.update(pparent)
+                
+                if "children" in x:
+                    getChildrenResults(x["children"],attrNames,pbase,t)
+                else:
+                    t.update({g: x["metrics"][g]["rv"] for g in x["metrics"].keys()})
+                    pbase.append(t)
+
+            return pbase
+
+        try:
+            
+            rows = getChildrenResults(pJsonObjDefinition["result"]["data"]["root"]["children"],[x["name"] for x in pJsonObjDefinition["result"]["definition"]["attributes"]])
+        except KeyError:
+            log.error("Error parsing dataset results")
+            raise MSTRError(msg="Error parsing dataset results", original_exception=e)
+
+
 class MSTRDatasetDefinition(MSTRObjDefinition):
+    ''' Parses the JSON object into a dataset definition
+        
+    '''
     _attributes = []
     _metrics = []
 
@@ -339,34 +410,35 @@ class MSTRObject:
 
     def __init__(self, Id, pJsonObjDefinition=None):
         self._ID = Id
-        self.update(pJsonObjDefinition)
+        if pJsonObjDefinition != None:
+            self.update(pJsonObjDefinition)
 
     def update(self, pJsonObjDefinition):
-        if pJsonObjDefinition != None:
-            self._name = pJsonObjDefinition.get("name", None)
-            try:
-                if isinstance(pJsonObjDefinition.get("type", None), int):
-                    self._type = enum.EnumDSSObjectType(pJsonObjDefinition.get("type", None))
-                else:
-                    self._type = enum.EnumDSSObjectType.searchName(pJsonObjDefinition.get("type", None))
-            except ValueError:
-                self._type = None
-            self._abbreviation = pJsonObjDefinition.get("abbreviation", None)
-            self._description = pJsonObjDefinition.get("description", None)
-            self._hidden = pJsonObjDefinition.get("hidden", None)
-            try:
-                self._subtype = enum.EnumDSSSubTypes(pJsonObjDefinition.get("subtype", None))
-            except ValueError:
-                self._subtype = None
-            self._extType = pJsonObjDefinition.get("extType", None)
-            self._dateCreated = pJsonObjDefinition.get("dateCreated", None)
-            self._dateModified = pJsonObjDefinition.get("dateModified", None)
-            self._version = pJsonObjDefinition.get("version", None)
-            self._acg = pJsonObjDefinition.get("acg", None)
-            self._iconPath = pJsonObjDefinition.get("iconPath", None)
-            self._viewMedia = pJsonObjDefinition.get("viewMedia", None)
-            self._comments = pJsonObjDefinition.get("comments", [])
-            self._ancestors = pJsonObjDefinition.get("ancestors", [])
+        
+        self._name = pJsonObjDefinition.get("name", None)
+        try:
+            if isinstance(pJsonObjDefinition.get("type", None), int):
+                self._type = enum.EnumDSSObjectType(pJsonObjDefinition.get("type", None))
+            else:
+                self._type = enum.EnumDSSObjectType.searchName(pJsonObjDefinition.get("type", None))
+        except ValueError:
+            self._type = None
+        self._abbreviation = pJsonObjDefinition.get("abbreviation", None)
+        self._description = pJsonObjDefinition.get("description", None)
+        self._hidden = pJsonObjDefinition.get("hidden", None)
+        try:
+            self._subtype = enum.EnumDSSSubTypes(pJsonObjDefinition.get("subtype", None))
+        except ValueError:
+            self._subtype = None
+        self._extType = pJsonObjDefinition.get("extType", None)
+        self._dateCreated = pJsonObjDefinition.get("dateCreated", None)
+        self._dateModified = pJsonObjDefinition.get("dateModified", None)
+        self._version = pJsonObjDefinition.get("version", None)
+        self._acg = pJsonObjDefinition.get("acg", None)
+        self._iconPath = pJsonObjDefinition.get("iconPath", None)
+        self._viewMedia = pJsonObjDefinition.get("viewMedia", None)
+        self._comments = pJsonObjDefinition.get("comments", [])
+        self._ancestors = pJsonObjDefinition.get("ancestors", [])
 
     # Read only properties
     @property
@@ -484,7 +556,12 @@ class MSTRAttribute(MSTRObject):
     _forms = []
 
     def __init__(self, ID, pJsonObjDefinition=None):
-        super(MSTRAttribute, self).__init__(ID, pJsonObjDefinition)
+        super(MSTRAttribute, self).__init__(ID, pJsonObjDefinition)     
+        if pJsonObjDefinition != None:
+            self.update(pJsonObjDefinition)
+
+    def update(self, pJsonObjDefinition):
+        super(MSTRAttribute, self).update(pJsonObjDefinition)
         self._forms = pJsonObjDefinition.get("forms", [])
 
     @property
@@ -498,8 +575,24 @@ class MSTRAttribute(MSTRObject):
 
 class MSTRMetric(MSTRObject):
 
+    _isDerived=False
+
     def __init__(self, ID, pJsonObjDefinition=None):
         super(MSTRMetric, self).__init__(ID, pJsonObjDefinition)
+        if pJsonObjDefinition != None:
+            self.update(pJsonObjDefinition)
+
+    def update(self, pJsonObjDefinition):
+        super(MSTRMetric, self).update(pJsonObjDefinition)
+        self._isDerived = (str(pJsonObjDefinition.get("isDerived", None)).upper() == 'TRUE')
+
+    @property
+    def isDerived(self):
+        return self._isDerived
+
+    def __repr__(self):
+        """ Textual representation of the object """
+        return super().__repr__() + " | isDerived: " + str(self._isDerived)
 
 
 class MSTRError(Exception):

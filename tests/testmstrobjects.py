@@ -44,8 +44,9 @@ class TestMSTR(testtools.TestCase):
 
     def test_mstrmetric(self):
         ''' Testing MSTRmetric class'''
-        m = {"name": "Discount", "id": "381980B211D40BC8C000C8906B98494F", "type": "Metric"}
+        m = {"name": "Discount", "id": "381980B211D40BC8C000C8906B98494F", "type": "Metric","isDerived": "true"}
         a = mstr.MSTRMetric(m["id"], m)
         self.assertEqual(a.ID, "381980B211D40BC8C000C8906B98494F", "Reading porperty ID failed")
         self.assertEqual(a.Name, "Discount", "Reading porperty Name failed")
         self.assertEqual(a.Type, mstr.EnumDSSObjectType.DSSTYPEMETRIC, "Reading porperty Type failed. Should be None")
+        self.assertEqual(a.isDerived, True, "Reading porperty isDerived failed")
