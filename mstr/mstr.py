@@ -1,12 +1,11 @@
 import requests
-import sys
 import logging as log
-import logging.config
 from datetime import datetime
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urljoin
 import re
 import json
 import mstr.mstrenum as enum
+from mstr.helpers import BinaryTree, Stack
 
 
 class MSTRSession:
@@ -388,6 +387,50 @@ class MSTRSearchResults:
         return retval
 
 
+class MSTRViewFiler:
+
+
+    def buildParseTree(self,fpexp):
+
+        if isinstance(fpexp,(list,tuple)):
+            fplist = fpexp
+        else:
+            splitter = re.compile(
+                "([0-9]+|\bAND\b|\bOR\b|\bNOT\b|\bIN\b|\bBETWEEN\b|\b[0-9A-Z]+\b|\(|\)|>=|<=|!=|<>|<|>|=|\+|\-)|\s", re.I)
+            fplist = [x.upper() for x in splitter.split(fpexp) if x != None and len(x) > 0]
+
+        pStack = Stack()
+        eTree = BinaryTree('')
+        pStack.push(eTree)
+        currentTree = eTree
+        for n, i in enumerate(fplist):
+            if i == '(':
+                if fplist[n + 1] != 'NOT':
+                    currentTree.insertLeft('')
+                    pStack.push(currentTree)
+                    currentTree = currentTree.getLeftChild()
+            elif i not in ['+', '-', '*', '/', 'AND', 'OR', 'NOT', '=', ')']:
+                currentTree.setRootVal(i)
+                parent = pStack.pop()
+                currentTree = parent
+            elif i in ['+', '-', '*', '/', '=', 'AND', 'OR']:
+                currentTree.setRootVal(i)
+                currentTree.insertRight('')
+                pStack.push(currentTree)
+                currentTree = currentTree.getRightChild()
+            elif i == ')':
+                currentTree = pStack.pop()
+            elif i == 'NOT':
+                currentTree.setRootVal(i)
+                currentTree.insertLeft('')
+                pStack.push(currentTree)
+                currentTree = currentTree.getLeftChild()
+            else:
+                raise ValueError
+
+        return eTree
+
+
 class MSTRObject:
     ''' Base MSTR Object
     The constructor receives an optional param with json object definition'''
@@ -613,4 +656,4 @@ class MSTRError(Exception):
 
 
 if __name__ == '__main__':
-    main()
+    pass
