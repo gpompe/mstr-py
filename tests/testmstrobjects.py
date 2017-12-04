@@ -37,10 +37,12 @@ class TestMSTR(testtools.TestCase):
         self.assertEqual(a.ID, "8D679D4B11D3E4981000E787EC6DE8A4", "Reading porperty ID failed")
         self.assertEqual(a.Name, "Region", "Reading porperty Name failed")
         self.assertEqual(a.Type, mstr.EnumDSSObjectType.DSSTYPEATTRIBUTE, "Reading porperty Type failed. Should be None")
-        self.assertEqual(a.Forms, [{"id": "CCFBE2A5EADB4F50941FB879CCF1721C", "name": "DESC", "dataType": "Char"}, {"id": "45C11FA478E745FEA08D781CEA190FE5", "name": "ID", "dataType": "Real"}], "Reading porperty Forms failed.")
+        self.assertEqual(a.todict(), {"type": "attribute", "id": "8D679D4B11D3E4981000E787EC6DE8A4", "name": "Region"}, "Error converting to dict")
         self.assertEqual(len(a.Forms), 2, "Error reading Forms length")
-        self.assertEqual(a.Forms[0], {"id": "CCFBE2A5EADB4F50941FB879CCF1721C", "name": "DESC", "dataType": "Char"}, "Error reading Forms list elements")
-        self.assertEqual(a.Forms[0]["id"], "CCFBE2A5EADB4F50941FB879CCF1721C", "Error reading Forms list elements")
+        self.assertEqual(a.Forms[0].ID, "CCFBE2A5EADB4F50941FB879CCF1721C", "Error reading Forms list elements")
+        self.assertEqual(a.Forms[0].Name, "DESC", "Error reading Forms list elements")
+        self.assertEqual(a.Forms[0].todict(), {"type": "form", "attribute": {"id": "8D679D4B11D3E4981000E787EC6DE8A4", "name": "Region"},"form": {"id": "CCFBE2A5EADB4F50941FB879CCF1721C", "name": "DESC"}}, "Error reading Forms list elements")
+
 
     def test_mstrmetric(self):
         ''' Testing MSTRmetric class'''
