@@ -251,7 +251,7 @@ class MSTRSession:
             log.error(err)
             raise
         except requests.exceptions.RequestException as e:
-            raise MSTRError("Details: %s" % r.text, err)
+            raise MSTRError("Details: %s" % r.text, e)
 
         return r
 
@@ -302,7 +302,7 @@ class MSTRDatasetResults(MSTRObjDefinition):
         try:
             
             rows = getChildrenResults(pJsonObjDefinition["result"]["data"]["root"]["children"],[x["name"] for x in pJsonObjDefinition["result"]["definition"]["attributes"]])
-        except KeyError:
+        except KeyError as e:
             log.error("Error parsing dataset results")
             raise MSTRError(msg="Error parsing dataset results", original_exception=e)
 
@@ -327,7 +327,7 @@ class MSTRDatasetResults(MSTRObjDefinition):
         try:
             
             rows = getChildrenResults(pJsonObjDefinition["result"]["data"]["root"]["children"],[x["name"] for x in pJsonObjDefinition["result"]["definition"]["attributes"]])
-        except KeyError:
+        except KeyError as e:
             log.error("Error parsing dataset results")
             raise MSTRError(msg="Error parsing dataset results", original_exception=e)
 
