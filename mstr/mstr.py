@@ -7,6 +7,25 @@ import json
 import mstr.mstrenum as enum
 from mstr.helpers import BinaryTree, Stack
 
+class MSTRError(Exception):
+    """Generic exception for MSTR library"""
+
+    def __init__(self, msg="", original_exception=None, code=None, error=None, pjson=None):
+        super(MSTRError, self).__init__((json.dumps(pjson) if pjson is not None else msg) + (
+            ("\nUnderlying Exception: %s" % original_exception) if original_exception is not None else ""))
+        self.original_exception = original_exception
+        if pjson is not None:
+            self.code = pjson.get("code", None)
+            self.message = pjson.get("message", None)
+            self.error = pjson.get("iServerCode", None)
+        else:
+            self.code = code
+            self.message = msg
+            self.error = error
+        log.error(self.message + (
+            ("\nUnderlying Exception: %s" % original_exception) if original_exception is not None else "") + (
+                      (" Error: %s" % self.error) if self.error is not None else "") + (
+                      (" Code: %s" % self.code) if self.code is not None else ""))
 
 class MSTRSession:
     """  This class manages the MSTR session and is the entry point to MSTR
@@ -162,13 +181,13 @@ class MSTRSession:
         _lcurProject = next((elem for elem in self._projects if elem['id'] == pProject), None)
         log.debug("MSTR Session Default Project searched by ID = %s", _lcurProject)
 
-        if _lcurProject == None:
+        if _lcurProject is None:
             # Search by Alias if there is an alias for the project
             _lcurProject = next(
                 (elem for elem in self._projects if elem['alias'] == pProject and len(elem['alias']) > 0), None)
             log.debug("MSTR Session Default Project searched by Alias = %s", _lcurProject)
 
-        if _lcurProject == None:
+        if _lcurProject is None:
             # Search by Name
             _lcurProject = next((elem for elem in self._projects if elem['name'] == pProject), None)
             log.debug("MSTR Session Default Project searched by Name = %s", _lcurProject)
@@ -282,7 +301,7 @@ class MSTRDatasetResults(MSTRObjDefinition):
     _metrics = []
 
     def __init__(self, pJsonObjDefinition):
-        super(MSTRDatasetDefinition, self).__init__(pJsonObjDefinition)
+        super(MSTRDatasetResults, self).__init__(pJsonObjDefinition)
         # print(pJsonObjDefinition)
         try:
             pass
@@ -296,7 +315,8 @@ class MSTRDatasetResults(MSTRObjDefinition):
 
             for x in pchildren:
 
-                # Get attribute definition. Removes the key attributeForms for the initial version. Might be needed later...
+                # Get attribute definition. Removes the key attributeForms for the initial version.
+                # Might be needed later...
                 t = {(attrNames[x["element"]["attributeIndex"]] if len(attrNames) > x["element"][
                     "attributeIndex"] else "element" + str(x["depth"])): {k: x["element"][k] for k in x["element"] if
                                                                           k != 'formValues'}}
@@ -318,7 +338,7 @@ class MSTRDatasetResults(MSTRObjDefinition):
             raise MSTRError(msg="Error parsing dataset results", original_exception=e)
 
     def getDataframeResults(self, pJsonObjDefinition):
-        def getChildrenResults(pchildren, attrNames=[], pbase=[], pparent={}):
+        def getChildrenResults(pchildren, attrNames=(), pbase=(), pparent={}):
             """ Recursive function to normalize the results """
 
             for x in pchildren:
@@ -345,62 +365,6 @@ class MSTRDatasetResults(MSTRObjDefinition):
             raise MSTRError(msg="Error parsing dataset results", original_exception=e)
 
 
-class MSTRDatasetDefinition(MSTRObjDefinition):
-    """  Parses the JSON object into a dataset definition
-        
-    """
-    _attributes = []
-    _metrics = []
-
-    def __init__(self, pJsonObjDefinition):
-        super(MSTRDatasetDefinition, self).__init__(pJsonObjDefinition)
-        # print(pJsonObjDefinition)
-        try:
-            self._attributes = list(map((lambda x: MSTRAttribute(x["id"], x)),
-                                        pJsonObjDefinition["result"]["definition"]["availableObjects"]["attributes"]))
-            self._metrics = list(map((lambda x: MSTRMetric(x["id"], x)),
-                                     pJsonObjDefinition["result"]["definition"]["availableObjects"]["metrics"]))
-        except KeyError as e:
-            log.error("Error parsing dataset definition")
-            raise MSTRError(msg="Error parsing dataset definition", original_exception=e)
-
-    @property
-    def Attributes(self):
-        return self._attributes
-
-    @property
-    def Metrics(self):
-        return self._metrics
-
-    def getAttribute(self, attrName):
-        return [attr for attr in self._attributes if attr.Name == attrName]
-
-    def __str__(self):
-        retvalA = ""
-        retvalM = ""
-        for x in self._attributes:
-            retvalA += str(x)
-        for x in self._metrics:
-            retvalM += str(x)
-        return "Attributes: [{0}]\nMetrics:[{1}]".format(retvalA, retvalM)
-
-
-class MSTRSearchResults:
-    _results = []
-
-    def __init__(self, pJsonSearchResult):
-        self._results = list(map((lambda x: MSTRObject(x["id"], x)), pJsonSearchResult.get("result", [])))
-
-    @property
-    def Results(self):
-        return self._results
-
-    def __str__(self):
-        retval = ""
-        for x in self._results:
-            retval += str(x)
-        return retval
-
 
 class MSTRViewFiler:
 
@@ -410,7 +374,8 @@ class MSTRViewFiler:
         #     fplist = fpexp
         # else:
         #     splitter = re.compile(
-        #         "([0-9]+|\bAND\b|\bOR\b|\bNOT\b|\bIN\b|\bBETWEEN\b|\b[0-9A-Z]+\b|\(|\)|>=|<=|!=|<>|<|>|=|\+|\-)|\s", re.I)
+        #         "([0-9]+|\bAND\b|\bOR\b|\bNOT\b|\bIN\b|\bBETWEEN\b|\b[0-9A-Z]+\b|\(|\)|>=|<=|!=|<>|<|>|=|\+|\-)|\s",
+        #           re.I)
         #     fplist = [x.upper() for x in splitter.split(fpexp) if x is not None and len(x) > 0]
 
         pstack = Stack()
@@ -445,7 +410,70 @@ class MSTRViewFiler:
         return etree
 
 
-class MSTRObject:
+class MSTRConstant(BinaryTree):
+    """ Represents a constant in MSTR
+        The available typer are: Date, Time, TimeStamp, Real, Char
+    """
+    _value = None
+    _dataType = None
+
+    def __init__(self, rootObj,dataType=None):
+        super(MSTRConstant, self).__init__(rootObj)
+        self._value = rootObj
+        self._dataType = self._detectdatatype(dataType)
+
+    @staticmethod
+    def _detectdatatype(dataType=None):
+        if dataType is None:
+            return 'Char'   # TODO: logic to detect type needs to be implemented
+        else:
+            return dataType
+
+    def todict(self):
+        return dict(type="constant", dataType=self._dataType, value=str(self._value))
+
+
+class MSTROperator(BinaryTree):
+    _symbols = None
+
+    def __init__(self, rootObj):
+        super(MSTROperator, self).__init__(rootObj)
+        self._symbols = self.operators().get(rootObj)
+
+    @staticmethod
+    def operators():
+        return {"bw": "BeginsWith",
+                "==": "Equals",
+                "cn": "Contains",
+                "ew": "EndsWith",
+                "!": "Greater",
+                ">=": "GreaterEqual",
+                "<": "Less",
+                "<=": "LessEqual",
+                "lk": "Like",
+                "!bw": "NotBeginsWith",
+                "!cn": "NotContains",
+                "!ew": "NotEndsWith",
+                "!=": "NotEqual",
+                "!lk": "NotLike",
+                "and": "And",
+                "or": "Or",
+                "not": "Not"}
+
+    @staticmethod
+    def operatorsexpresions():
+        return MSTROperator.operators().keys()
+
+    def todict(self):
+        operands = []
+        if self.leftChild is not None:
+            operands.append(self.leftChild.todict())
+        if self.rightChild is not None:
+            operands.append(self.rightChild.todict())
+        return dict(operator=self._symbols, operands=operands)
+
+
+class MSTRObject(BinaryTree):
     """  Base MSTR Object
     The constructor receives an optional param with json object definition"""
 
@@ -466,6 +494,7 @@ class MSTRObject:
     _ancestors = []
 
     def __init__(self, Id, pJsonObjDefinition=None):
+        super(MSTRObject, self).__init__(id)
         self._ID = Id
         if pJsonObjDefinition is not None:
             self.update(pJsonObjDefinition)
@@ -620,14 +649,14 @@ class AuthorizationToken:
         return "token:[{0}] - isValid: {1} - issuedOn: {2}".format(self.token, self.isValid, self.issuedOn)
 
 
-class MSTRAttributeForm(MSTRObjDefinition):
+class MSTRAttributeForm(BinaryTree):
     _parent = None
     _formID = None
     _formName = None
     _formDataType = None
 
     def __init__(self, parent, pJsonObjDefinition=None):
-        super(MSTRAttributeForm, self).__init__(pJsonObjDefinition)
+        super(MSTRAttributeForm, self).__init__(parent.ID)
         self._parent = parent
         if pJsonObjDefinition is not None:
             self.update(pJsonObjDefinition)
@@ -664,7 +693,7 @@ class MSTRAttributeForm(MSTRObjDefinition):
 
 
 class MSTRAttribute(MSTRObject):
-    _forms = []
+    _forms = {}
 
     def __init__(self, ID, pJsonObjDefinition=None):
         super(MSTRAttribute, self).__init__(ID, pJsonObjDefinition)
@@ -673,7 +702,7 @@ class MSTRAttribute(MSTRObject):
 
     def update(self, pJsonObjDefinition):
         super(MSTRAttribute, self).update(pJsonObjDefinition)
-        self._forms = list(map((lambda x: MSTRAttributeForm(self, x)), pJsonObjDefinition["forms"]))
+        self._forms = dict((x["name"], MSTRAttributeForm(self, x)) for x in pJsonObjDefinition["forms"])
 
     @property
     def Forms(self):
@@ -711,26 +740,62 @@ class MSTRMetric(MSTRObject):
         return super().__repr__() + " | isDerived: " + str(self._isDerived)
 
 
-class MSTRError(Exception):
-    """Generic exception for MSTR library"""
+class MSTRDatasetDefinition(MSTRObjDefinition):
+    """  Parses the JSON object into a dataset definition
 
-    def __init__(self, msg="", original_exception=None, code=None, error=None, pjson=None):
-        super(MSTRError, self).__init__((json.dumps(pjson) if pjson is not None else msg) + (
-            ("\nUnderlying Exception: %s" % original_exception) if original_exception is not None else ""))
-        self.original_exception = original_exception
-        if pjson is not None:
-            self.code = pjson.get("code", None)
-            self.message = pjson.get("message", None)
-            self.error = pjson.get("iServerCode", None)
-        else:
-            self.code = code
-            self.message = msg
-            self.error = error
-        log.error(self.message + (
-            ("\nUnderlying Exception: %s" % original_exception) if original_exception is not None else "") + (
-                      (" Error: %s" % self.error) if self.error is not None else "") + (
-                      (" Code: %s" % self.code) if self.code is not None else ""))
+    """
+    _attributes = []
+    _metrics = []
 
+    def __init__(self, pJsonObjDefinition):
+        super(MSTRDatasetDefinition, self).__init__(pJsonObjDefinition)
+        # print(pJsonObjDefinition)
+        try:
+            self._attributes = list(map((lambda x: MSTRAttribute(x["id"], x)),
+                                        pJsonObjDefinition["result"]["definition"]["availableObjects"][
+                                            "attributes"]))
+            self._metrics = list(map((lambda x: MSTRMetric(x["id"], x)),
+                                     pJsonObjDefinition["result"]["definition"]["availableObjects"]["metrics"]))
+        except KeyError as e:
+            log.error("Error parsing dataset definition")
+            raise MSTRError(msg="Error parsing dataset definition", original_exception=e)
+
+    @property
+    def Attributes(self):
+        return self._attributes
+
+    @property
+    def Metrics(self):
+        return self._metrics
+
+    def getAttribute(self, attrName):
+        return [attr for attr in self._attributes if attr.Name == attrName]
+
+    def __str__(self):
+        retvalA = ""
+        retvalM = ""
+        for x in self._attributes:
+            retvalA += str(x)
+        for x in self._metrics:
+            retvalM += str(x)
+        return "Attributes: [{0}]\nMetrics:[{1}]".format(retvalA, retvalM)
+
+
+class MSTRSearchResults:
+    _results = []
+
+    def __init__(self, pJsonSearchResult):
+        self._results = list(map((lambda x: MSTRObject(x["id"], x)), pJsonSearchResult.get("result", [])))
+
+    @property
+    def Results(self):
+        return self._results
+
+    def __str__(self):
+        retval = ""
+        for x in self._results:
+            retval += str(x)
+        return retval
 
 if __name__ == '__main__':
     pass

@@ -57,7 +57,7 @@ class BinaryTree:
         self.rightChild = t
 
     def isLeaf(self):
-        return ((not self.leftChild) and (not self.rightChild))
+        return (not self.leftChild) and (not self.rightChild)
 
     def getRightChild(self):
         return self.rightChild
@@ -68,7 +68,7 @@ class BinaryTree:
     def setRootVal(self, obj):
         self.key = obj
 
-    def getRootVal(self,):
+    def getRootVal(self, ):
         return self.key
 
     def inorder(self):
@@ -101,9 +101,7 @@ class BinaryTree:
             self.rightChild.printexp()
             print(')', end=' ')
 
-
-
-    def printtree(self,level=0):
+    def printtree(self, level=0):
 
         if self.leftChild:
             self.leftChild.printtree(level + 1)
@@ -111,18 +109,8 @@ class BinaryTree:
         if self.rightChild:
             self.rightChild.printtree(level + 1)
 
-    def postordereval(self):
-        opers = {'+': operator.add, '-': operator.sub, '*': operator.mul, '/': operator.truediv}
-        res1 = None
-        res2 = None
-        if self.leftChild:
-            res1 = self.leftChild.postordereval()  # // \label{peleft}
-        if self.rightChild:
-            res2 = self.rightChild.postordereval()  # // \label{peright}
-        if res1 and res2:
-            return opers[self.key](res1, res2)  # // \label{peeval}
-        else:
-            return self.key
-
     def height(self):
-        return 1 + max((self.leftChild.height() if self.leftChild != None else 0), (self.rightChild.height() if self.rightChild != None else 0))
+        return 1 + max((self.leftChild.height() if self.leftChild is not None else 0),
+                       (self.rightChild.height() if self.rightChild is not None else 0))
+
+
