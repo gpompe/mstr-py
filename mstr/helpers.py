@@ -41,9 +41,6 @@ class BinaryTree:
         else:
             t = BinaryTree(newNode)
 
-        # if self.leftChild is not None:
-        #     t.left = self.leftChild
-
         self.leftChild = t
 
     def insertRight(self, newNode):
@@ -52,8 +49,6 @@ class BinaryTree:
         else:
             t = BinaryTree(newNode)
 
-        # if self.rightChild is not None:
-        #     t.right = self.rightChild
         self.rightChild = t
 
     def isLeaf(self):
@@ -71,46 +66,18 @@ class BinaryTree:
     def getRootVal(self, ):
         return self.key
 
-    def inorder(self):
-        if self.leftChild:
-            self.leftChild.inorder()
-        print(self.key)
-        if self.rightChild:
-            self.rightChild.inorder()
 
-    def postorder(self):
-        if self.leftChild:
-            self.leftChild.postorder()
-        if self.rightChild:
-            self.rightChild.postorder()
-        print(self.key)
+    def todict(self):
+        if self.isLeaf():
+            return self.key.todict()
+        else:
+            operands = []
+            if self.leftChild is not None:
+                operands.append(self.leftChild.todict())
+            if self.rightChild is not None:
+                operands.append(self.rightChild.todict())
+            return dict(operator=self.key, operands=operands)
 
-    def preorder(self):
-        print(self.key)
-        if self.leftChild:
-            self.leftChild.preorder()
-        if self.rightChild:
-            self.rightChild.preorder()
 
-    def printexp(self):
-        if self.leftChild:
-            print('(', end=' ')
-            self.leftChild.printexp()
-        print(self.key, end=' ')
-        if self.rightChild:
-            self.rightChild.printexp()
-            print(')', end=' ')
-
-    def printtree(self, level=0):
-
-        if self.leftChild:
-            self.leftChild.printtree(level + 1)
-        print("- " + str(level) + " - " + str(self.key))
-        if self.rightChild:
-            self.rightChild.printtree(level + 1)
-
-    def height(self):
-        return 1 + max((self.leftChild.height() if self.leftChild is not None else 0),
-                       (self.rightChild.height() if self.rightChild is not None else 0))
 
 

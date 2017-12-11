@@ -4,8 +4,8 @@ from datetime import datetime
 from urllib.parse import urljoin
 import re
 import json
-import mstr.mstrenum as enum
-from mstr.helpers import BinaryTree, Stack
+import mstr.base as base
+
 
 class MSTRError(Exception):
     """Generic exception for MSTR library"""
@@ -171,6 +171,43 @@ class MSTRSession:
             log.debug("MSTR Session Object Info failed. Invalid session for %s", self._user)
             return None
 
+    def getData(self, pMstrDataset, pMstrObjectList=None, pMstrFilterList=None, pMstrProjectId=None):
+        """  Get information for an specific object"""
+        log.debug("MSTR Session Data request for %s", self._user)
+        if self.isValid:
+
+            if pMstrDataset.Object.Subtype == base.EnumDSSSubTypes.DSSSUBTYPEREPORTCUBE:
+                _lmethod = "cubes"
+            else:
+                _lmethod = "reports"
+
+            body = {}
+
+            if pMstrObjectList is not None:
+                requestedObjects = dict(attributes=[dict(id=e.ID) for e in pMstrObjectList if isinstance(e, MSTRAttribute)],
+                                          forms=[dict(id=e.ID) for e in pMstrObjectList if isinstance(e, MSTRAttributeForm)],
+                                          metrics=[dict(id=e.ID) for e in pMstrObjectList if isinstance(e, MSTRMetric)])
+                body["requestedObjects"] = requestedObjects
+
+            if pMstrFilterList is not None:
+                filter = MSTRViewFiler(pMstrFilterList)
+                body["viewFilter"] = filter.todict()
+
+            try:
+                r = self.request('POST', urljoin(self._mstr_url, _lmethod + "/" + pMstrDataset.Object.ID) +
+                                 '/instances', pHeaders=self.getProjectHeader(pMstrProjectId), pBody=body)
+
+
+                log.debug("MSTR Session Data request for %s", self._user)
+
+                return MSTRDatasetResults(r.json())
+            except MSTRError as err:
+                log.debug("MSTR Session Data request failed. HTTP Error: %s", err)
+                return None
+        else:
+            log.debug("MSTR Session Data request failed. Invalid session for %s", self._user)
+            return None
+
     def searchForProject(self, pProject):
         """ 
         Searches for project in ID, Alias and Name (in this order until find first ocurrence)
@@ -195,8 +232,8 @@ class MSTRSession:
         return _lcurProject
 
     def quickSearchProject(self, pSearchString=None, pRootFolderId=None,
-                           pSearchType=enum.EnumDssXmlSearchType.DSSXMLSEARCHTYPECONTAINS,
-                           pObjectTypes=[enum.EnumDSSObjectType.DSSTYPEREPORTDEFINITION], pMstrProjectId=None):
+                           pSearchType=base.EnumDssXmlSearchType.DSSXMLSEARCHTYPECONTAINS,
+                           pObjectTypes=[base.EnumDSSObjectType.DSSTYPEREPORTDEFINITION], pMstrProjectId=None):
         """  Get the list of projects available for the session"""
         log.debug("MSTR Session Quick Search for %s", self._user)
         if self.isValid:
@@ -243,7 +280,7 @@ class MSTRSession:
         log.debug("MSTR Session Dataset Definition for %s", self._user)
         if self.isValid:
 
-            if pMstrObject.Subtype == enum.EnumDSSSubTypes.DSSSUBTYPEREPORTCUBE:
+            if pMstrObject.Subtype == base.EnumDSSSubTypes.DSSSUBTYPEREPORTCUBE:
                 _lmethod = "cubes"
             else:
                 _lmethod = "reports"
@@ -252,7 +289,7 @@ class MSTRSession:
                                  pHeaders=self.getProjectHeader(pMstrProjectId))
 
                 log.debug("MSTR Session Dataset Definition for %s", self._user)
-                return MSTRDatasetDefinition(r.json())
+                return MSTRDatasetDefinition(pMstrObject, r.json())
             except MSTRError as err:
                 log.debug("MSTR Session Dataset Definition failed. HTTP Error: %s", err)
                 return None
@@ -365,115 +402,57 @@ class MSTRDatasetResults(MSTRObjDefinition):
             raise MSTRError(msg="Error parsing dataset results", original_exception=e)
 
 
-
 class MSTRViewFiler:
 
-    def buildParseTree(self, fplist):
+    _expressions = None
+    _tree = None
 
-        # if isinstance(fpexp,(list,tuple)):
-        #     fplist = fpexp
-        # else:
-        #     splitter = re.compile(
-        #         "([0-9]+|\bAND\b|\bOR\b|\bNOT\b|\bIN\b|\bBETWEEN\b|\b[0-9A-Z]+\b|\(|\)|>=|<=|!=|<>|<|>|=|\+|\-)|\s",
-        #           re.I)
-        #     fplist = [x.upper() for x in splitter.split(fpexp) if x is not None and len(x) > 0]
+    def __init__(self,expressionList):
+        self._expressions = expressionList
+        self._tree = self.buildParseTree(expressionList)
 
-        pstack = Stack()
-        etree = BinaryTree('')
+    @staticmethod
+    def buildParseTree(fplist):
+
+        pstack = base.Stack()
+        etree = base.BinaryTree('')
         pstack.push(etree)
         currenttree = etree
         for n, i in enumerate(fplist):
             if i == '(':
-                if fplist[n + 1] != 'NOT':
+                if not isinstance(fplist[n + 1], base.MSTRUnaryOperator):
                     currenttree.insertLeft('')
                     pstack.push(currenttree)
                     currenttree = currenttree.getLeftChild()
-            elif i not in ['+', '-', '*', '/', 'AND', 'OR', 'NOT', '=', ')']:
+            elif not isinstance(i, base.MSTROperator) and i != ')':
                 currenttree.setRootVal(i)
                 parent = pstack.pop()
                 currenttree = parent
-            elif i in ['+', '-', '*', '/', '=', 'AND', 'OR']:
-                currenttree.setRootVal(i)
+            elif isinstance(i, base.MSTRBinaryOperator):
+                currenttree.setRootVal(i.Expression)
                 currenttree.insertRight('')
                 pstack.push(currenttree)
                 currenttree = currenttree.getRightChild()
-            elif i == ')':
-                currenttree = pstack.pop()
-            elif i == 'NOT':
-                currenttree.setRootVal(i)
+            elif isinstance(i, base.MSTRUnaryOperator):
+                currenttree.setRootVal(i.Expression)
                 currenttree.insertLeft('')
                 pstack.push(currenttree)
                 currenttree = currenttree.getLeftChild()
+            elif i == ')':
+                currenttree = pstack.pop()
             else:
                 raise ValueError
 
         return etree
 
 
-class MSTRConstant(BinaryTree):
-    """ Represents a constant in MSTR
-        The available typer are: Date, Time, TimeStamp, Real, Char
-    """
-    _value = None
-    _dataType = None
-
-    def __init__(self, rootObj,dataType=None):
-        super(MSTRConstant, self).__init__(rootObj)
-        self._value = rootObj
-        self._dataType = self._detectdatatype(dataType)
-
-    @staticmethod
-    def _detectdatatype(dataType=None):
-        if dataType is None:
-            return 'Char'   # TODO: logic to detect type needs to be implemented
-        else:
-            return dataType
 
     def todict(self):
-        return dict(type="constant", dataType=self._dataType, value=str(self._value))
+        return  self._tree.todict()
 
 
-class MSTROperator(BinaryTree):
-    _symbols = None
 
-    def __init__(self, rootObj):
-        super(MSTROperator, self).__init__(rootObj)
-        self._symbols = self.operators().get(rootObj)
-
-    @staticmethod
-    def operators():
-        return {"bw": "BeginsWith",
-                "==": "Equals",
-                "cn": "Contains",
-                "ew": "EndsWith",
-                "!": "Greater",
-                ">=": "GreaterEqual",
-                "<": "Less",
-                "<=": "LessEqual",
-                "lk": "Like",
-                "!bw": "NotBeginsWith",
-                "!cn": "NotContains",
-                "!ew": "NotEndsWith",
-                "!=": "NotEqual",
-                "!lk": "NotLike",
-                "and": "And",
-                "or": "Or",
-                "not": "Not"}
-
-    @staticmethod
-    def operatorsexpresions():
-        return MSTROperator.operators().keys()
-
-    def todict(self):
-        operands = []
-        if self.leftChild is not None:
-            operands.append(self.leftChild.todict())
-        if self.rightChild is not None:
-            operands.append(self.rightChild.todict())
-        return dict(operator=self._symbols, operands=operands)
-
-
-class MSTRObject(BinaryTree):
+class MSTRObject:
     """  Base MSTR Object
     The constructor receives an optional param with json object definition"""
 
@@ -494,7 +473,6 @@ class MSTRObject(BinaryTree):
     _ancestors = []
 
     def __init__(self, Id, pJsonObjDefinition=None):
-        super(MSTRObject, self).__init__(id)
         self._ID = Id
         if pJsonObjDefinition is not None:
             self.update(pJsonObjDefinition)
@@ -504,16 +482,16 @@ class MSTRObject(BinaryTree):
         self._name = pJsonObjDefinition.get("name", None)
         try:
             if isinstance(pJsonObjDefinition.get("type", None), int):
-                self._type = enum.EnumDSSObjectType(pJsonObjDefinition.get("type", None))
+                self._type = base.EnumDSSObjectType(pJsonObjDefinition.get("type", None))
             else:
-                self._type = enum.EnumDSSObjectType.searchName(pJsonObjDefinition.get("type", None))
+                self._type = base.EnumDSSObjectType.searchName(pJsonObjDefinition.get("type", None))
         except ValueError:
             self._type = None
         self._abbreviation = pJsonObjDefinition.get("abbreviation", None)
         self._description = pJsonObjDefinition.get("description", None)
         self._hidden = pJsonObjDefinition.get("hidden", None)
         try:
-            self._subtype = enum.EnumDSSSubTypes(pJsonObjDefinition.get("subtype", None))
+            self._subtype = base.EnumDSSSubTypes(pJsonObjDefinition.get("subtype", None))
         except ValueError:
             self._subtype = None
         self._extType = pJsonObjDefinition.get("extType", None)
@@ -649,14 +627,14 @@ class AuthorizationToken:
         return "token:[{0}] - isValid: {1} - issuedOn: {2}".format(self.token, self.isValid, self.issuedOn)
 
 
-class MSTRAttributeForm(BinaryTree):
+class MSTRAttributeForm(MSTRObjDefinition):
     _parent = None
     _formID = None
     _formName = None
     _formDataType = None
 
     def __init__(self, parent, pJsonObjDefinition=None):
-        super(MSTRAttributeForm, self).__init__(parent.ID)
+        super(MSTRAttributeForm, self).__init__(pJsonObjDefinition)
         self._parent = parent
         if pJsonObjDefinition is not None:
             self.update(pJsonObjDefinition)
@@ -746,10 +724,11 @@ class MSTRDatasetDefinition(MSTRObjDefinition):
     """
     _attributes = []
     _metrics = []
+    _mstrobject = None
 
-    def __init__(self, pJsonObjDefinition):
+    def __init__(self, pMstrObject, pJsonObjDefinition):
         super(MSTRDatasetDefinition, self).__init__(pJsonObjDefinition)
-        # print(pJsonObjDefinition)
+        self._mstrobject = pMstrObject
         try:
             self._attributes = list(map((lambda x: MSTRAttribute(x["id"], x)),
                                         pJsonObjDefinition["result"]["definition"]["availableObjects"][
@@ -767,6 +746,10 @@ class MSTRDatasetDefinition(MSTRObjDefinition):
     @property
     def Metrics(self):
         return self._metrics
+
+    @property
+    def Object(self):
+        return self._mstrobject
 
     def getAttribute(self, attrName):
         return [attr for attr in self._attributes if attr.Name == attrName]

@@ -12,21 +12,21 @@ class TestMSTR(testtools.TestCase):
              "viewMedia": 0, "comments": ["Comment 1", "Comment 2"]}
 
         c = mstr.MSTRObject('FFFFFFFFFFFFFFFFFFFFFFFF', m)
-        self.assertEqual(c.ID, "FFFFFFFFFFFFFFFFFFFFFFFF", "Reading porperty ID failed")
-        self.assertEqual(c.Name, "string", "Reading porperty Name failed")
-        self.assertEqual(c.Type, mstr.EnumDSSObjectType(0), "Reading porperty Type failed")
-        self.assertEqual(c.Abbreviation, "string", "Reading porperty Abbreviation failed")
-        self.assertEqual(c.Description, "string", "Reading porperty Description failed")
-        self.assertEqual(c.Hidden, True, "Reading porperty Hidden failed")
-        self.assertEqual(c.Subtype, mstr.EnumDSSSubTypes(0), "Reading porperty Subtype failed")
-        self.assertEqual(c.ExtType, 0, "Reading porperty ExtType failed")
-        self.assertEqual(c.DateCreated, "2017-11-23T15:16:56.589Z", "Reading porperty DateCreated failed")
-        self.assertEqual(c.DateModified, "2017-11-23T15:16:56.589Z", "Reading porperty DateModified failed")
-        self.assertEqual(c.Version, "string", "Reading porperty Version failed")
-        self.assertEqual(c.Acg, 0, "Reading porperty Acg failed")
-        self.assertEqual(c.IconPath, "string", "Reading porperty IconPath failed")
-        self.assertEqual(c.ViewMedia, 0, "Reading porperty ViewMedia failed")
-        self.assertEqual(c.Comments, ["Comment 1", "Comment 2"], "Reading porperty Comments failed")
+        self.assertEqual(c.ID, "FFFFFFFFFFFFFFFFFFFFFFFF", "Reading property ID failed")
+        self.assertEqual(c.Name, "string", "Reading property Name failed")
+        self.assertEqual(c.Type, mstr.EnumDSSObjectType(0), "Reading property Type failed")
+        self.assertEqual(c.Abbreviation, "string", "Reading property Abbreviation failed")
+        self.assertEqual(c.Description, "string", "Reading property Description failed")
+        self.assertEqual(c.Hidden, True, "Reading property Hidden failed")
+        self.assertEqual(c.Subtype, mstr.EnumDSSSubTypes(0), "Reading property Subtype failed")
+        self.assertEqual(c.ExtType, 0, "Reading property ExtType failed")
+        self.assertEqual(c.DateCreated, "2017-11-23T15:16:56.589Z", "Reading property DateCreated failed")
+        self.assertEqual(c.DateModified, "2017-11-23T15:16:56.589Z", "Reading property DateModified failed")
+        self.assertEqual(c.Version, "string", "Reading property Version failed")
+        self.assertEqual(c.Acg, 0, "Reading property Acg failed")
+        self.assertEqual(c.IconPath, "string", "Reading property IconPath failed")
+        self.assertEqual(c.ViewMedia, 0, "Reading property ViewMedia failed")
+        self.assertEqual(c.Comments, ["Comment 1", "Comment 2"], "Reading property Comments failed")
 
         m = {"name": "string", "id": "string", "type": "something invalid", "abbreviation": "string",
              "description": "string", "hidden": True, "subtype": 0, "extType": 0,
@@ -34,7 +34,7 @@ class TestMSTR(testtools.TestCase):
              "acg": 0, "iconPath": "string", "viewMedia": 0, "comments": ["Comment 1", "Comment 2"]}
 
         c = mstr.MSTRObject('FFFFFFFFFFFFFFFFFFFFFFFF', m)
-        self.assertEqual(c.Type, None, "Reading porperty Type failed. Should be None")
+        self.assertEqual(c.Type, None, "Reading property Type failed. Should be None")
 
     def test_mstrattribute(self):
         """ Testing MSTRAttribute class"""
@@ -42,10 +42,10 @@ class TestMSTR(testtools.TestCase):
              "forms": [{"id": "CCFBE2A5EADB4F50941FB879CCF1721C", "name": "DESC", "dataType": "Char"},
                        {"id": "45C11FA478E745FEA08D781CEA190FE5", "name": "ID", "dataType": "Real"}]}
         a = mstr.MSTRAttribute(m["id"], m)
-        self.assertEqual(a.ID, "8D679D4B11D3E4981000E787EC6DE8A4", "Reading porperty ID failed")
-        self.assertEqual(a.Name, "Region", "Reading porperty Name failed")
+        self.assertEqual(a.ID, "8D679D4B11D3E4981000E787EC6DE8A4", "Reading property ID failed")
+        self.assertEqual(a.Name, "Region", "Reading property Name failed")
         self.assertEqual(a.Type, mstr.EnumDSSObjectType.DSSTYPEATTRIBUTE,
-                         "Reading porperty Type failed. Should be None")
+                         "Reading property Type failed. Should be None")
         self.assertEqual(a.todict(), {"type": "attribute", "id": "8D679D4B11D3E4981000E787EC6DE8A4", "name": "Region"},
                          "Error converting to dict")
         self.assertEqual(len(a.Forms), 2, "Error reading Forms length")
@@ -61,33 +61,55 @@ class TestMSTR(testtools.TestCase):
         """ Testing MSTRmetric class"""
         m = {"name": "Discount", "id": "381980B211D40BC8C000C8906B98494F", "type": "Metric", "isDerived": "true"}
         a = mstr.MSTRMetric(m["id"], m)
-        self.assertEqual(a.ID, "381980B211D40BC8C000C8906B98494F", "Reading porperty ID failed")
-        self.assertEqual(a.Name, "Discount", "Reading porperty Name failed")
-        self.assertEqual(a.Type, mstr.EnumDSSObjectType.DSSTYPEMETRIC, "Reading porperty Type failed. Should be None")
-        self.assertEqual(a.isDerived, True, "Reading porperty isDerived failed")
+        self.assertEqual(a.ID, "381980B211D40BC8C000C8906B98494F", "Reading property ID failed")
+        self.assertEqual(a.Name, "Discount", "Reading property Name failed")
+        self.assertEqual(a.Type, mstr.EnumDSSObjectType.DSSTYPEMETRIC, "Reading property Type failed. Should be None")
+        self.assertEqual(a.isDerived, True, "Reading property isDerived failed")
 
     def test_mstrconstant(self):
         """ Testing MSTRConstant class"""
         m = mstr.MSTRConstant(3)
         self.assertEqual(m.todict(), {"type": "constant", "dataType": "Char", "value": "3"},
-                         "Reading porperty ID failed")
+                         "Reading property ID failed")
 
     def test_mstroperator(self):
         """ Testing MSTROperator class
+        """
+
+        m = mstr.MSTROperatorEquals()
+
+        self.assertEqual(m.Expression, "Equals", "Reading operator expression failed")
+
+    def test_mstrviewfilter(self):
+        """ Testing MSTRViewFilter class
         """
         d = {"name": "Region", "id": "8D679D4B11D3E4981000E787EC6DE8A4", "type": "Attribute",
              "forms": [{"id": "CCFBE2A5EADB4F50941FB879CCF1721C", "name": "DESC", "dataType": "Char"},
                        {"id": "45C11FA478E745FEA08D781CEA190FE5", "name": "ID", "dataType": "Real"}]}
         a = mstr.MSTRAttribute(d["id"], d)
 
-        m = mstr.MSTROperator('==')
-        m.insertLeft(a.Forms["ID"])
-        m.insertRight(mstr.MSTRConstant(1, 'Real'))
+        explist = ['(', a.Forms["ID"], mstr.MSTROperatorEquals(),mstr.MSTRConstant(1, 'Real'), ')']
 
-        self.assertEqual(m.todict(), {"operator": "Equals", "operands": [{
+        m = mstr.MSTRViewFiler(explist)
+
+        self.assertEqual(m.todict(), {"viewFilter": {"operator": "Equals", "operands": [{
             "type": "form",
             "attribute": {"id": "8D679D4B11D3E4981000E787EC6DE8A4", "name": "Region"},
             "form": {"id": "45C11FA478E745FEA08D781CEA190FE5", "name": "ID"},
         }, {
             "type": "constant", "dataType": "Real", "value": "1"
-        }]}, "Reading porperty ID failed")
+        }]}}, "Reading dict expression failed")
+
+        explist = ['(', mstr.MSTROperatorNot(), '(', a.Forms["ID"], mstr.MSTROperatorEquals(),
+                   mstr.MSTRConstant(1, 'Real'), ')', ')']
+
+        m = mstr.MSTRViewFiler(explist)
+
+        self.assertEqual(m.todict(), {"viewFilter": {"operator": "Not", "operands": [
+            {"operator": "Equals", "operands": [{
+            "type": "form",
+            "attribute": {"id": "8D679D4B11D3E4981000E787EC6DE8A4", "name": "Region"},
+            "form": {"id": "45C11FA478E745FEA08D781CEA190FE5", "name": "ID"},
+        }, {
+            "type": "constant", "dataType": "Real", "value": "1"
+        }]}]}}, "Reading dict expression failed")

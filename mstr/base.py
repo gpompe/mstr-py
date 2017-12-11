@@ -1,4 +1,253 @@
 from enum import IntEnum
+from numbers import Number
+
+
+class Stack:
+    def __init__(self):
+        self.items = []
+
+    def isEmpty(self):
+        return self.items == []
+
+    def push(self, item):
+        self.items.append(item)
+
+    def pop(self) -> object:
+        return self.items.pop()
+
+    def lookback(self, n=1):
+        if len(self.items) - n < 0:
+            return None
+        else:
+            return self.items[len(self.items) - n]
+
+    def size(self):
+        return len(self.items)
+
+
+class BinaryTree:
+    """
+    A recursive implementation of Binary Tree
+    Using links and Nodes approach.
+    Modified to allow for trees to be constructed from other trees rather than always creating
+    a new tree in the insertLeft or insertRight
+    """
+
+    def __init__(self, rootObj):
+        self.key = rootObj
+        self.leftChild = None
+        self.rightChild = None
+
+    def insertLeft(self, newNode):
+
+        if isinstance(newNode, BinaryTree):
+            t = newNode
+        else:
+            t = BinaryTree(newNode)
+
+        self.leftChild = t
+
+    def insertRight(self, newNode):
+        if isinstance(newNode, BinaryTree):
+            t = newNode
+        else:
+            t = BinaryTree(newNode)
+
+        self.rightChild = t
+
+    def isLeaf(self):
+        return (not self.leftChild) and (not self.rightChild)
+
+    def getRightChild(self):
+        return self.rightChild
+
+    def getLeftChild(self):
+        return self.leftChild
+
+    def setRootVal(self, obj):
+        self.key = obj
+
+    def getRootVal(self, ):
+        return self.key
+
+
+    def todict(self):
+        if self.isLeaf():
+            return self.key.todict()
+        else:
+            operands = []
+            if self.leftChild is not None:
+                operands.append(self.leftChild.todict())
+            if self.rightChild is not None:
+                operands.append(self.rightChild.todict())
+            return dict(operator=self.key, operands=operands)
+
+
+
+class MSTRConstant:
+    """ Represents a constant in MSTR
+        The available typer are: Date, Time, TimeStamp, Real, Char
+    """
+    _value = None
+    _dataType = None
+
+    def __init__(self, rootObj, dataType=None):
+        self._value = rootObj
+        self._dataType = self._detectdatatype(dataType)
+
+    def _detectdatatype(self, dataType=None):
+        if dataType is None:
+            if isinstance(dataType, Number):
+                return 'Real'
+            else:
+                return 'Char'   # TODO: logic to detect Date and Datetime type needs to be implemented
+        else:
+            return dataType
+
+    @property
+    def _tomstrstr(self):
+        return str(self._value)
+
+    def todict(self):
+        return dict(type="constant", dataType=self._dataType, value=self._tomstrstr)
+
+
+class MSTROperator:
+    _symbols = None
+    _expression = None
+    _arity = 2
+    
+    def __init__(self, symbol, expression, arity=2):
+        # super(MSTROperator, self).__init__(symbol)
+        self._symbols = symbol
+        self._expression = expression
+        self._arity = arity
+
+    @property
+    def Expression(self):
+        return self._expression
+
+    # def todict(self,leftChild=None,rightChild=None):
+    #     operands = []
+    #     if leftChild is not None:
+    #         operands.append(leftChild.todict())
+    #     if rightChild is not None:
+    #         operands.append(rightChild.todict())
+    #     return dict(operator=self._expression, operands=operands)
+
+
+class MSTRUnaryOperator(MSTROperator):
+
+    def __init__(self, symbol, expression):
+        super(MSTRUnaryOperator, self).__init__(symbol, expression, 1)
+
+
+class MSTRBinaryOperator(MSTROperator):
+
+    def __init__(self, symbol, expression):
+        super(MSTRBinaryOperator, self).__init__(symbol, expression, )
+
+
+class MSTROperatorBeginsWith(MSTRBinaryOperator):
+    
+    def __init__(self, symbol='bw'):
+        super(MSTROperatorBeginsWith, self).__init__(symbol, 'BeginsWith')
+
+
+class MSTROperatorEquals(MSTRBinaryOperator):
+
+    def __init__(self, symbol='=='):
+        super(MSTROperatorEquals, self).__init__(symbol, 'Equals')
+
+
+class MSTROperatorContains(MSTRBinaryOperator):
+
+    def __init__(self, symbol='cn'):
+        super(MSTROperatorContains, self).__init__(symbol, 'Contains')
+
+
+class MSTROperatorEndsWith(MSTRBinaryOperator):
+
+    def __init__(self, symbol='ew'):
+        super(MSTROperatorEndsWith, self).__init__(symbol, 'EndsWith')
+
+
+class MSTROperatorGreater(MSTRBinaryOperator):
+
+    def __init__(self, symbol='>'):
+        super(MSTROperatorGreater, self).__init__(symbol, 'Greater')
+
+
+class MSTROperatorGreaterEqual(MSTRBinaryOperator):
+
+    def __init__(self, symbol='>='):
+        super(MSTROperatorGreaterEqual, self).__init__(symbol, 'GreaterEqual')
+
+
+class MSTROperatorLessEqual(MSTRBinaryOperator):
+
+    def __init__(self, symbol='<='):
+        super(MSTROperatorLessEqual, self).__init__(symbol, 'LessEqual')
+
+
+class MSTROperatorLess(MSTRBinaryOperator):
+
+    def __init__(self, symbol='<'):
+        super(MSTROperatorLess, self).__init__(symbol, 'Less')
+
+
+class MSTROperatorLike(MSTRBinaryOperator):
+
+    def __init__(self, symbol='lk'):
+        super(MSTROperatorLike, self).__init__(symbol, 'Like')
+
+
+class MSTROperatorNotBeginsWith(MSTRBinaryOperator):
+
+    def __init__(self, symbol='!bw'):
+        super(MSTROperatorNotBeginsWith, self).__init__(symbol, 'NotBeginsWith')
+
+
+class MSTROperatorNotContains(MSTRBinaryOperator):
+
+    def __init__(self, symbol='!cn'):
+        super(MSTROperatorNotContains, self).__init__(symbol, 'NotContains')
+
+
+class MSTROperatorNotEndsWith(MSTRBinaryOperator):
+
+    def __init__(self, symbol='!ew'):
+        super(MSTROperatorNotEndsWith, self).__init__(symbol, 'NotEndsWith')
+
+
+class MSTROperatorNotEquals(MSTRBinaryOperator):
+
+    def __init__(self, symbol='!='):
+        super(MSTROperatorNotEquals, self).__init__(symbol, 'NotEquals')
+
+
+class MSTROperatorNotLike(MSTRBinaryOperator):
+
+    def __init__(self, symbol='!lk'):
+        super(MSTROperatorNotLike, self).__init__(symbol, 'NotLike')
+
+
+class MSTROperatorAnd(MSTRBinaryOperator):
+
+    def __init__(self, symbol='and'):
+        super(MSTROperatorAnd, self).__init__(symbol, 'And')
+
+
+class MSTROperatorOr(MSTRBinaryOperator):
+
+    def __init__(self, symbol='or'):
+        super(MSTROperatorOr, self).__init__(symbol, 'Or')
+
+
+class MSTROperatorNot(MSTRUnaryOperator):
+
+    def __init__(self, symbol='not'):
+        super(MSTROperatorNot, self).__init__(symbol, 'Not')
 
 
 class BaseMSTREnum(IntEnum):
